@@ -1,3 +1,5 @@
+import type { DSClass } from "./ds_class"
+
 export type DSTalent = {
     name: string
     classRequirements: ClassRequirement[]
@@ -5,7 +7,7 @@ export type DSTalent = {
 }
 
 type ClassRequirement = {
-    dsClass: string
+    dsClass: DSClass
     classLevel: number
     maxTalentRank: number
 }

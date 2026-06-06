@@ -1,6 +1,14 @@
-import type { DSTalent } from '../model/talent'
+import { DSClass } from '../model/ds_class'
+import { type DSTalent } from '../model/talent'
 import type { TextLine } from './pdf-text'
 import { romanToInt } from './roman'
+
+const DS_CLASSES = new Set<string>(Object.values(DSClass))
+
+/** Maps a raw requirement abbreviation to a DSClass, or null if it is unknown. */
+function toDSClass(token: string): DSClass | null {
+  return DS_CLASSES.has(token) ? (token as DSClass) : null
+}
 
 /** First entry of the alphabetical talent list; marks where parsing starts. */
 const SECTION_START = 'ABKLINGEN'
@@ -56,11 +64,16 @@ function splitBody(body: string): Pick<DSTalent, 'classRequirements' | 'descript
   let rest = body
   let match: RegExpExecArray | null
   while ((match = REQ_TOKEN.exec(rest))) {
-    classRequirements.push({
-      dsClass: match[1]!,
-      classLevel: Number(match[2]),
-      maxTalentRank: romanToInt(match[3]!),
-    })
+    const dsClass = toDSClass(match[1]!)
+    if (dsClass === null) {
+      console.error(`Skipping unknown DS class in talent requirement: "${match[1]}"`)
+    } else {
+      classRequirements.push({
+        dsClass,
+        classLevel: Number(match[2]),
+        maxTalentRank: romanToInt(match[3]!),
+      })
+    }
     rest = rest.slice(match[0].length)
   }
   return { classRequirements, description: rest.trim() }

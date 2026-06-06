@@ -16,7 +16,6 @@ const progress = ref(0);
 const error = ref<string | null>(null);
 
 async function onFileSelect(event: FileUploadSelectEvent) {
-  console.log(event)
   const file = event.files?.[0] as File | undefined;
   if (!file) return;
 
