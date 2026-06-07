@@ -1,4 +1,5 @@
 import * as pdfjs from 'pdfjs-dist'
+import { OPS } from 'pdfjs-dist'
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 // Vite bundles the worker; `?worker` gives us a Worker constructor.
 import PdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?worker'
@@ -208,4 +209,124 @@ export async function extractEquipmentRegions(data: ArrayBuffer): Promise<CellRo
   }
 
   return regions
+}
+
+/** A spell-type icon recovered from a spell page, located and identified by pixel hash. */
+export interface SpellIcon {
+  page: number
+  /** PDF user-space coordinates of the icon's placement (bottom-left). */
+  x: number
+  y: number
+  /** Stable hash of the icon's decoded pixels; equal hashes are the same visual icon. */
+  hash: string
+}
+
+/** Spell detail entries live on these PDF pages. */
+const SPELL_PAGES: number[] = Array.from({ length: 87 - 60 + 1 }, (_, i) => 60 + i)
+/** The spell-type icons render at ~16 user-space units; ignore larger background art. */
+const ICON_MIN_SCALE = 5
+const ICON_MAX_SCALE = 40
+
+/** 6-element PDF transform matrix multiply (m ∘ n). */
+function matMul(m: number[], n: number[]): number[] {
+  return [
+    m[0]! * n[0]! + m[2]! * n[1]!,
+    m[1]! * n[0]! + m[3]! * n[1]!,
+    m[0]! * n[2]! + m[2]! * n[3]!,
+    m[1]! * n[2]! + m[3]! * n[3]!,
+    m[0]! * n[4]! + m[2]! * n[5]! + m[4]!,
+    m[1]! * n[4]! + m[3]! * n[5]! + m[5]!,
+  ]
+}
+
+/** FNV-1a hash over a byte buffer; used to fingerprint icon pixels. */
+function fnv1a(bytes: ArrayLike<number>): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= bytes[i]!
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(16)
+}
+
+/** Resolves a (possibly async) image XObject by id, picking the right object store. */
+function resolveImage(page: pdfjs.PDFPageProxy, name: string): Promise<unknown> {
+  const store = name.startsWith('g_') ? page.commonObjs : page.objs
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (obj: unknown) => {
+      if (!settled) {
+        settled = true
+        resolve(obj)
+      }
+    }
+    try {
+      ;(store as { get(id: string, cb: (o: unknown) => void): void }).get(name, finish)
+    } catch {
+      finish(null)
+    }
+  })
+}
+
+/** Fingerprints an image object's pixels; falls back to its dimensions if data is absent. */
+function hashImageObject(obj: unknown): string {
+  const o = obj as { data?: ArrayLike<number>; width?: number; height?: number } | null
+  if (o?.data && o.data.length) return `${o.width}x${o.height}:${fnv1a(o.data)}`
+  return `dim:${o?.width ?? 0}x${o?.height ?? 0}`
+}
+
+/**
+ * Extracts the spell-type icons from the spell pages (60–87). The same visual icon
+ * is stored under several XObject names, so each drawn icon is identified by hashing
+ * its decoded pixels (offscreen-canvas decoding is disabled so raw `data` is available).
+ * The CTM is tracked through the operator list to recover each icon's position; the
+ * spell parser maps a hash to ZAUBER/ZIELZAUBER and matches icons to spell headings.
+ */
+export async function extractSpellIcons(data: ArrayBuffer): Promise<SpellIcon[]> {
+  const loadingTask = pdfjs.getDocument({ data, isOffscreenCanvasSupported: false })
+  const doc = await loadingTask.promise
+  const icons: SpellIcon[] = []
+
+  try {
+    for (const pageNum of SPELL_PAGES) {
+      if (pageNum > doc.numPages) continue
+      const page = await doc.getPage(pageNum)
+      const opList = await page.getOperatorList()
+
+      let ctm = [1, 0, 0, 1, 0, 0]
+      const stack: number[][] = []
+      const draws: { name: string; x: number; y: number }[] = []
+
+      for (let i = 0; i < opList.fnArray.length; i++) {
+        const fn = opList.fnArray[i]
+        const args = opList.argsArray[i] as unknown[]
+        if (fn === OPS.save) stack.push(ctm.slice())
+        else if (fn === OPS.restore) ctm = stack.pop() ?? ctm
+        else if (fn === OPS.transform) ctm = matMul(ctm, args as number[])
+        else if (fn === OPS.paintImageXObject) {
+          const scale = Math.abs(ctm[0]!)
+          if (scale >= ICON_MIN_SCALE && scale <= ICON_MAX_SCALE) {
+            draws.push({ name: args[0] as string, x: ctm[4]!, y: ctm[5]! })
+          }
+        }
+      }
+
+      // Resolve and hash each drawn icon (cache by name; the same id repeats per page).
+      const hashByName = new Map<string, string>()
+      for (const draw of draws) {
+        let hash = hashByName.get(draw.name)
+        if (hash === undefined) {
+          hash = hashImageObject(await resolveImage(page, draw.name))
+          hashByName.set(draw.name, hash)
+        }
+        icons.push({ page: pageNum, x: draw.x, y: draw.y, hash })
+      }
+
+      page.cleanup()
+    }
+  } finally {
+    await loadingTask.destroy()
+  }
+
+  return icons
 }

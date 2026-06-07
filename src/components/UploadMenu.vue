@@ -6,9 +6,11 @@ import ProgressBar from 'primevue/progressbar';
 import Message from 'primevue/message';
 import { ref } from 'vue';
 import { useRulesStore } from '@/store/rules-store';
-import { extractLines, extractEquipmentRegions } from '@/dungeonslayers/parsing/pdf-text';
+import { extractLines, extractEquipmentRegions, extractSpellIcons } from '@/dungeonslayers/parsing/pdf-text';
 import { parseTalents } from '@/dungeonslayers/parsing/parse-talents';
 import { parseEquipment } from '@/dungeonslayers/parsing/parse-equipment';
+import { parseSpellTables } from '@/dungeonslayers/parsing/parse-spell-tables';
+import { parseSpells } from '@/dungeonslayers/parsing/parse-spells';
 
 const store = useRulesStore();
 
@@ -39,9 +41,14 @@ async function onFileSelect(event: FileUploadSelectEvent) {
     statusMessage.value = 'parsing equipment...'
     const equipmentRegions = await extractEquipmentRegions(buffer.slice(0));
     const equipment = parseEquipment(equipmentRegions);
+    statusMessage.value = 'parsing spells...'
+    const spellIcons = await extractSpellIcons(buffer.slice(0));
+    const spellClasses = parseSpellTables(lines);
+    const spells = parseSpells(lines, spellIcons, spellClasses);
     store.resetStore();
     store.addTalents(talents);
     store.setEquipment(equipment);
+    store.addSpells(spells);
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to parse the PDF.';
   } finally {

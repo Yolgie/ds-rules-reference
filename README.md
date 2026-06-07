@@ -6,6 +6,8 @@ For more information about dungeonslayers see: https://www.dungeonslayers.net/
 
 To use this reference, first Upload the Rules PDF and the application will parse it for you.
 
+The Application can be accessed under https://alexkarer.github.io/ds-rules-reference/spells
+
 ## Project Setup
 
 ```sh
