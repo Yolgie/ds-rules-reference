@@ -111,3 +111,103 @@ export async function extractLines(
 
   return lines
 }
+
+/** One row of a PDF table, split into cells (left → right). */
+export interface CellRow {
+  cells: string[]
+}
+
+/** Equipment lives on these PDF pages; page 90 (Waffen/Rüstungen) spans the full width. */
+const EQUIPMENT_PAGES = [88, 89, 90]
+const FULL_WIDTH_PAGES = new Set([90])
+/** A horizontal gap wider than this between item boxes starts a new table cell. */
+const CELL_GAP = 9
+
+interface SizedItem extends PositionedItem {
+  w: number
+}
+
+/** Groups items into visual rows by y, then splits each row into cells by x-gaps. */
+function buildCellRows(items: SizedItem[]): CellRow[] {
+  const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x)
+  const rows: CellRow[] = []
+  let rowItems: SizedItem[] = []
+
+  const flush = () => {
+    if (rowItems.length === 0) return
+    rowItems.sort((a, b) => a.x - b.x)
+    const cells: string[] = []
+    let cell: SizedItem[] = []
+    for (const item of rowItems) {
+      const prev = cell[cell.length - 1]
+      if (prev && item.x - (prev.x + prev.w) > CELL_GAP) {
+        cells.push(cell.map((i) => i.text).join(' ').replace(/\s+/g, ' ').trim())
+        cell = []
+      }
+      cell.push(item)
+    }
+    if (cell.length > 0) cells.push(cell.map((i) => i.text).join(' ').replace(/\s+/g, ' ').trim())
+    rows.push({ cells: cells.filter((c) => c) })
+    rowItems = []
+  }
+
+  for (const item of sorted) {
+    if (rowItems.length > 0 && Math.abs(item.y - rowItems[0]!.y) > LINE_TOLERANCE) flush()
+    rowItems.push(item)
+  }
+  flush()
+  return rows
+}
+
+/**
+ * Extracts the equipment pages as table regions of cell-rows. Pages 88/89 hold
+ * paired narrow tables, so each is split at mid-x into a left and a right region;
+ * page 90 (Waffen/Rüstungen) is full-width and emitted as a single region. The
+ * parser processes each region independently (resetting its current table), which
+ * keeps trailing notes/rows from bleeding across columns or pages.
+ */
+export async function extractEquipmentRegions(data: ArrayBuffer): Promise<CellRow[][]> {
+  const loadingTask = pdfjs.getDocument({ data })
+  const doc = await loadingTask.promise
+  const regions: CellRow[][] = []
+
+  try {
+    for (const pageNum of EQUIPMENT_PAGES) {
+      if (pageNum > doc.numPages) continue
+      const page = await doc.getPage(pageNum)
+      const viewport = page.getViewport({ scale: 1 })
+      const midX = viewport.width / 2
+      const minY = viewport.height * MARGIN_FRACTION
+      const maxY = viewport.height * (1 - MARGIN_FRACTION)
+
+      const content = await page.getTextContent()
+      const left: SizedItem[] = []
+      const right: SizedItem[] = []
+      const full: SizedItem[] = []
+      const fullWidth = FULL_WIDTH_PAGES.has(pageNum)
+
+      for (const raw of content.items) {
+        if (!isTextItem(raw) || isRotated(raw) || !raw.str.trim()) continue
+        const x = raw.transform[4]
+        const y = raw.transform[5]
+        if (y < minY || y > maxY) continue
+        const item: SizedItem = { x, y, w: raw.width, text: raw.str }
+        if (fullWidth) full.push(item)
+        else (x + raw.width / 2 < midX ? left : right).push(item)
+      }
+
+      if (fullWidth) {
+        regions.push(buildCellRows(full))
+      } else {
+        regions.push(buildCellRows(left))
+        regions.push(buildCellRows(right))
+      }
+
+      page.cleanup()
+    }
+  } finally {
+    await loadingTask.destroy()
+  }
+
+  return regions
+}

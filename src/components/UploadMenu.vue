@@ -6,8 +6,9 @@ import ProgressBar from 'primevue/progressbar';
 import Message from 'primevue/message';
 import { ref } from 'vue';
 import { useRulesStore } from '@/store/rules-store';
-import { extractLines } from '@/dungeonslayers/parsing/pdf-text';
+import { extractLines, extractEquipmentRegions } from '@/dungeonslayers/parsing/pdf-text';
 import { parseTalents } from '@/dungeonslayers/parsing/parse-talents';
+import { parseEquipment } from '@/dungeonslayers/parsing/parse-equipment';
 
 const store = useRulesStore();
 
@@ -25,15 +26,20 @@ async function onFileSelect(event: FileUploadSelectEvent) {
 
   try {
     const buffer = await file.arrayBuffer();
-    const lines = await extractLines(buffer, (fraction) => {
+    // pdfjs transfers (detaches) the buffer it is given, so pass a fresh clone to
+    // each pass and keep the original `buffer` intact for the next clone.
+    const lines = await extractLines(buffer.slice(0), (fraction) => {
       progress.value = Math.round(fraction * 100);
     });
     const talents = parseTalents(lines);
     if (talents.length === 0) {
       throw new Error('No talents could be parsed. Is this the Dungeonslayers rules PDF?');
     }
+    const equipmentRegions = await extractEquipmentRegions(buffer.slice(0));
+    const equipment = parseEquipment(equipmentRegions);
     store.resetStore();
     store.addTalents(talents);
+    store.setEquipment(equipment);
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to parse the PDF.';
   } finally {
