@@ -8,6 +8,11 @@ import Menubar from 'primevue/menubar';
 
 const menuItems: Ref<MenuItem[]> = ref([
   {
+    label: 'Hier Starten',
+    route: '/',
+    icon: 'pi pi-home'
+  },
+  {
     label: 'Talente',
     route: '/talents',
     icon: 'pi pi-user'

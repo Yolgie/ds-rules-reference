@@ -30,7 +30,7 @@ const tiere = ['Reittiere', 'Tiere'];
   <main>
     <h1>Ausrüstung</h1>
     <section v-if="isDataLoaded" class="equipment">
-      <Tabs value="0">
+      <Tabs value="0" lazy>
         <TabList>
           <Tab value="0">Gegenstände</Tab>
           <Tab value="1">Dienstleistungen</Tab>
