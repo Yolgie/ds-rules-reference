@@ -27,7 +27,7 @@ const stats = computed(() =>
     <template #title>
       <div class="title-row">
         <span>{{ spell.name }} 
-          <i v-if="spell.spellType === SpellType.ZAUBER" class="spell-type-iconpi pi-book"></i>
+          <i v-if="spell.spellType === SpellType.ZAUBER" class="spell-type-icon pi pi-book"></i>
           <i v-if="spell.spellType === SpellType.ZIELZAUBER" class="spell-type-icon pi pi-bullseye"></i>
         </span>
         <Tag v-if="spell.spellType" :value="spell.spellType" severity="info" />
