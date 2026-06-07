@@ -41,6 +41,17 @@ const menuItems: Ref<MenuItem[]> = ref([
             </a>
         </router-link>
       </template>
+      <template #end>
+        <a
+          href="https://github.com/alexkarer/ds-rules-reference"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="github-link"
+          aria-label="GitHub Repository"
+        >
+          <span class="pi pi-github" />
+        </a>
+      </template>
     </Menubar>
   </header>
   <RouterView />
@@ -52,5 +63,17 @@ header {
   margin-left: 1vh;
   margin-right: 1vh;
   margin-bottom: 1vh;
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.github-link .pi-github {
+  font-size: 1.5rem;
 }
 </style>
