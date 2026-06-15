@@ -13,6 +13,8 @@ export interface SpellFilter {
 }
 
 function matchesClassAndLevel(spell: DSSpell, classes: DSClass[], maxLevel: number | null): boolean {
+  if (classes.length === 0 && maxLevel === null) return true
+
   return spell.classRequirements.some((req) => {
     const classMatches = classes.length === 0 || classes.includes(req.dsClass)
     const levelMatches = maxLevel === null || req.level <= maxLevel
