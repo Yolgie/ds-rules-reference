@@ -12,19 +12,17 @@ export interface SpellFilter {
   search: string
 }
 
-function matchesClasses(spell: DSSpell, classes: DSClass[]): boolean {
-  if (classes.length === 0) return true
-  return spell.classRequirements.some((req) => classes.includes(req.dsClass))
+function matchesClassAndLevel(spell: DSSpell, classes: DSClass[], maxLevel: number | null): boolean {
+  return spell.classRequirements.some((req) => {
+    const classMatches = classes.length === 0 || classes.includes(req.dsClass)
+    const levelMatches = maxLevel === null || req.level <= maxLevel
+    return classMatches && levelMatches
+  })
 }
 
 function matchesSpellTypes(spell: DSSpell, spellTypes: SpellType[]): boolean {
   if (spellTypes.length === 0) return true
   return spell.spellType !== null && spellTypes.includes(spell.spellType)
-}
-
-function matchesLevel(spell: DSSpell, maxLevel: number | null): boolean {
-  if (maxLevel === null) return true
-  return spell.classRequirements.some((req) => req.level <= maxLevel)
 }
 
 function matchesSearch(spell: DSSpell, search: string): boolean {
@@ -37,9 +35,8 @@ function matchesSearch(spell: DSSpell, search: string): boolean {
 export function filterSpells(spells: DSSpell[], filter: SpellFilter): DSSpell[] {
   return spells.filter(
     (spell) =>
-      matchesClasses(spell, filter.classes) &&
+      matchesClassAndLevel(spell, filter.classes, filter.maxLevel) &&
       matchesSpellTypes(spell, filter.spellTypes) &&
-      matchesLevel(spell, filter.maxLevel) &&
       matchesSearch(spell, filter.search),
   )
 }
