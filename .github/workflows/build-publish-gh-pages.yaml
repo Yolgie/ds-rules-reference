@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      reason:
+        description: Reason for manually deploying GitHub Pages
+        required: false
+        type: string
 
 permissions:
   contents: read
